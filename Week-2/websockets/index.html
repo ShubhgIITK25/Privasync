@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat</title>
+</head>
+<body>
+    <h1>WebSocket with FastAPI</h1>
+    <form action="" onsubmit="sendMessage(event)">
+        <input type="text" id="messageText" autocomplete="off" />
+        <button>Send</button>
+    </form>
+    <ul id='messages'></ul>
+    <script>
+        var ws = new WebSocket(`ws://localhost:5000/communicate`); //ws:// is the WebSocket protocol (like http:// but for WebSockets)
+// new instantiates the object
+// WebSocket is a built-in class provided by the browser — you don't need to import or install anything. Every modern browser has it natively.
+// javascriptvar ws = new WebSocket(`ws://localhost:5000/communicate`);
+// This one line:
+// Creates a WebSocket object
+// Immediately tries to connect to the server URL you provide
+// Stores that object in ws variable so you can use it later
+
+        ws.onmessage = function(event) { //event handler that fires whenever a message is received from the server. event.data contains the message content sent by the server.
+            var messages = document.getElementById('messages');
+            var message = document.createElement('li');
+            var content = document.createTextNode(event.data); // createTextNode() wraps that text into a text node (a piece of text that can be inserted into HTML)
+            message.appendChild(content);
+            messages.appendChild(message);
+        };
+// ws.onmessage is an event handler , you are assigning a function to it
+
+        function sendMessage(event) {
+            var input = document.getElementById("messageText");
+            ws.send(input.value);
+            input.value = '';
+            event.preventDefault(); 
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>WebSocket Chat</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        #messages { list-style: none; padding: 0; height: 300px; overflow-y: auto;
+                    border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        #messages li { margin-bottom: 6px; }
+        #messages li.system { color: gray; font-style: italic; }
+        #messages li.bot { color: #1a6e2e; font-style: italic; }
+        .meta { font-size: 0.75em; color: #888; margin-right: 6px; }
+        #login, #chat { padding: 10px 0; }
+        #chat { display: none; }
+        input { padding: 6px; margin-right: 4px; }
+        button { padding: 6px 12px; cursor: pointer; }
+        #status { font-size: 0.85em; color: green; margin-bottom: 8px; }
+        #status.disconnected { color: red; }
+    </style>
+</head>
+<body>
+    <h2>WebSocket Chat</h2>
+
+    <div id="login">
+        <input id="usernameInput" type="text" placeholder="Your name" />
+        <input id="tokenInput" type="text" placeholder="Token (e.g. token-alice)" />
+        <button onclick="connectChat()">Connect</button>
+    </div>
+
+
+    <div id="chat">
+        <div id="status"> Connected</div>
+        <ul id="messages"></ul>
+        <input id="messageText" type="text" placeholder="Type a message..." autocomplete="off" />
+        <button onclick="sendMessage()">Send</button>
+        <button onclick="disconnectChat()" style="background:#fee;margin-left:4px">Disconnect</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let myUsername = "";
+
+        function connectChat() {
+            const username = document.getElementById("usernameInput").value.trim();
+            const token    = document.getElementById("tokenInput").value.trim();
+
+            if (!username || !token) {
+                alert("Please enter both a username and token.");
+                return;
+            }
+
+            myUsername = username;
+            //             The browser automatically sends this HTTP request behind the scenes:
+// GET /communicate HTTP/1.1
+// Host: localhost:5000
+// Upgrade: websocket               browser adds this automatically
+// Connection: Upgrade              browser adds this automatically
+            const url = `ws://localhost:5000/communicate?token=${encodeURIComponent(token)}&username=${encodeURIComponent(username)}`;
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                document.getElementById("login").style.display = "none";
+                document.getElementById("chat").style.display  = "block";
+                setStatus("connected");
+            };
+
+            // Handle incoming JSON messages
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                addMessage(msg);
+            };
+
+            ws.onclose = (event) => {
+                setStatus("disconnected");
+                // 1008 = Policy Violation = bad token
+                if (event.code === 1008) {
+                    alert("Connection rejected: invalid token.");
+                    document.getElementById("login").style.display = "block";
+                    document.getElementById("chat").style.display  = "none";
+                }
+            };
+
+            ws.onerror = () => setStatus("disconnected");
+
+            // Allow Enter key to send
+            document.getElementById("messageText").addEventListener("keydown", (e) => {
+                if (e.key === "Enter") sendMessage();
+            });
+        }
+
+        function sendMessage() {
+            const input = document.getElementById("messageText");
+            const text  = input.value.trim();
+            if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            // Send as JSON
+            ws.send(JSON.stringify({ text }));
+            input.value = "";
+        }
+
+        function disconnectChat() {
+            if (ws) ws.close();
+            document.getElementById("login").style.display = "block";
+            document.getElementById("chat").style.display  = "none";
+            document.getElementById("messages").innerHTML  = "";
+        }
+
+        function addMessage(msg) {
+            const li = document.createElement("li");
+
+            if (msg.type === "system") {
+                li.className = "system";
+                li.textContent = msg.text;
+            } else if (msg.type === "bot") {
+                li.className = "bot";
+                li.innerHTML = `<span class="meta">[${msg.timestamp}] <strong>${msg.username}</strong>:</span>${escapeHtml(msg.text)}`;
+            } else {
+                // Show: [12:34:05] Alice: Hello
+                li.innerHTML = `<span class="meta">[${msg.timestamp}] <strong>${msg.username}</strong>:</span>${escapeHtml(msg.text)}`;
+            }
+
+            const list = document.getElementById("messages");
+            list.appendChild(li);
+            list.scrollTop = list.scrollHeight; // auto-scroll to bottom
+        }
+
+        function setStatus(state) {
+            const el = document.getElementById("status");
+            el.className = state;
+            el.textContent = state === "connected" ? " Connected" : " Disconnected";
+        }
+
+        // Prevent XSS from message content
+        function escapeHtml(text) {
+            return text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        }
+    </script>
+</body>
+</html>
